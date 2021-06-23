@@ -5,8 +5,8 @@
   "keywords": [],
   "main": "src/index.tsx",
   "dependencies": {
-    "@react-rxjs/core": "0.6.1",
-    "@react-rxjs/utils": "0.2.0",
+    "@react-rxjs/core": "^0.8.2",
+    "@react-rxjs/utils": "^0.9.1",
     "react": "^16.12.0",
     "react-dom": "^16.12.0",
     "react-scripts": "3.3.0",
