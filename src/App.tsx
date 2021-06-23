@@ -1,22 +1,15 @@
-import { Subject, combineLatest, merge } from "rxjs";
-import { bind, shareLatest, Subscribe } from "@react-rxjs/core";
-import { collectValues, mergeWithKey, split } from "@react-rxjs/utils";
+import { combineLatest } from "rxjs";
 import { map, takeWhile, scan, startWith } from "rxjs/operators";
+import { bind, shareLatest, Subscribe } from "@react-rxjs/core";
+import { createSignal, partitionByKey, combineKeys, mergeWithKey } from "@react-rxjs/utils";
 import * as React from "react";
 import "./styles.css";
 
-const newTodo$ = new Subject<string>();
-export const onNewTodo = (text: string) => text && newTodo$.next(text);
-
-const editTodo$ = new Subject<{ id: number; text: string }>();
-export const onEditTodo = (id: number, text: string) =>
-  editTodo$.next({ id, text });
-
-const toggleTodo$ = new Subject<number>();
-export const onToggleTodo = (id: number) => toggleTodo$.next(id);
-
-const deleteTodo$ = new Subject<number>();
-export const onDeleteTodo = (id: number) => deleteTodo$.next(id);
+// entry points for user actions
+const [newTodo$, onNewTodo] = createSignal<string>();
+const [editTodo$, onEditTodo] = createSignal<{ id: number; text: string }>();
+const [toggleTodo$, onToggleTodo] = createSignal<number>();
+const [deleteTodo$, onDeleteTodo] = createSignal<number>();
 
 const todoActions$ = mergeWithKey({
   add: newTodo$.pipe(map((text, id) => ({ id: id, text }))),
@@ -26,30 +19,30 @@ const todoActions$ = mergeWithKey({
 });
 
 type Todo = { id: number; text: string; done: boolean };
-const todosMap$ = todoActions$.pipe(
-  split(
-    (event) => event.payload.id,
-    (event$, id) =>
-      event$.pipe(
-        takeWhile((event) => event.type !== "delete"),
-        scan(
-          (state, action) => {
-            switch (action.type) {
-              case "add":
-              case "edit":
-                return { ...state, text: action.payload.text };
-              case "toggle":
-                return { ...state, done: !state.done };
-              default:
-                return state;
-            }
-          },
-          { id, text: "", done: false } as Todo
-        )
+const [_todosMap, keys$] = partitionByKey(
+  todoActions$,
+  (event) => event.payload.id,
+  (event$, id) =>
+    event$.pipe(
+      takeWhile((event) => event.type !== "delete"),
+      scan(
+        (state, action) => {
+          switch (action.type) {
+            case "add":
+            case "edit":
+              return { ...state, text: action.payload.text };
+            case "toggle":
+              return { ...state, done: !state.done };
+            default:
+              return state;
+          }
+        },
+        { id, text: "", done: false } as Todo
       )
-  ),
-  collectValues()
-);
+    ),
+)
+
+const todosMap$ = combineKeys(keys$, _todosMap);
 
 const todosList$ = todosMap$.pipe(
   map((todosMap) => [...todosMap.values()]),
@@ -61,10 +54,8 @@ export enum FilterType {
   Done = "done",
   Pending = "pending"
 }
-const selectedFilter$ = new Subject<FilterType>();
-export const onSelectFilter = (type: FilterType) => {
-  selectedFilter$.next(type);
-};
+const [selectedFilter$, onSelectFilter] = createSignal<FilterType>();
+
 const [useCurrentFilter, currentFilter$] = bind(
   selectedFilter$.pipe(startWith(FilterType.All))
 );
@@ -79,7 +70,7 @@ const [useTodos, todos$] = bind(
       const isDone = currentFilter === FilterType.Done;
       return todos.filter((todo) => todo.done === isDone);
     })
-  )
+  ), []
 );
 
 function TodoListFilters() {
@@ -165,7 +156,7 @@ const TodoItem: React.FC<{ item: Todo }> = ({ item }) => (
       type="text"
       value={item.text}
       onChange={({ target }) => {
-        onEditTodo(item.id, target.value);
+        onEditTodo({id: item.id, text: target.value});
       }}
     />
     <input
@@ -201,11 +192,12 @@ function TodoList() {
   );
 }
 
-const provider$ = merge(todos$, stats$);
 export default function App() {
   return (
-    <Subscribe source$={provider$}>
-      <TodoList />
+    <Subscribe>
+      <React.Suspense fallback={<p>wait</p>}>
+        <TodoList />
+      </React.Suspense>
     </Subscribe>
   );
 }
