@@ -19,7 +19,7 @@ const todoActions$ = mergeWithKey({
 });
 
 type Todo = { id: number; text: string; done: boolean };
-const [_todosMap, keys$] = partitionByKey(
+const [todosById, keys$] = partitionByKey(
   todoActions$,
   (event) => event.payload.id,
   (event$, id) =>
@@ -42,10 +42,10 @@ const [_todosMap, keys$] = partitionByKey(
     ),
 )
 
-const todosMap$ = combineKeys(keys$, _todosMap);
+const todosMap$ = combineKeys(keys$, todosById);
 
 const todosList$ = todosMap$.pipe(
-  map((todosMap) => [...todosMap.values()]),
+  map((x) => [...x.values()]),
   shareLatest() // We are using shareLatest because the stats will also consume it
 );
 
@@ -60,18 +60,8 @@ const [useCurrentFilter, currentFilter$] = bind(
   selectedFilter$.pipe(startWith(FilterType.All))
 );
 
-const [useTodos, todos$] = bind(
-  combineLatest(todosList$, currentFilter$).pipe(
-    map(([todos, currentFilter]) => {
-      if (currentFilter === FilterType.All) {
-        return todos;
-      }
-
-      const isDone = currentFilter === FilterType.Done;
-      return todos.filter((todo) => todo.done === isDone);
-    })
-  ), []
-);
+const [useTodos, todos$] = bind(keys$);
+const [useTodo, todo$] = bind((id: number) => todosById(id));
 
 function TodoListFilters() {
   const filter = useCurrentFilter();
@@ -150,31 +140,42 @@ function TodoItemCreator() {
   );
 }
 
-const TodoItem: React.FC<{ item: Todo }> = ({ item }) => (
-  <div>
-    <input
-      type="text"
-      value={item.text}
-      onChange={({ target }) => {
-        onEditTodo({id: item.id, text: target.value});
-      }}
-    />
-    <input
-      type="checkbox"
-      checked={item.done}
-      onChange={() => {
-        onToggleTodo(item.id);
-      }}
-    />
-    <button
-      onClick={() => {
-        onDeleteTodo(item.id);
-      }}
-    >
-      X
-    </button>
-  </div>
-);
+const TodoItem: React.FC<{ id: number }> = ({ id }) => {
+  const item = useTodo(id);
+  const currentFilter = useCurrentFilter();
+
+  return (
+    !(currentFilter == 'all'
+      || (currentFilter == 'done' && item.done )
+      || (currentFilter == 'pending' && !item.done))
+    ? null
+    : (
+        <div>
+          <input
+            type="text"
+            value={item.text}
+            onChange={({ target }) => {
+              onEditTodo({id: item.id, text: target.value});
+            }}
+          />
+          <input
+            type="checkbox"
+            checked={item.done}
+            onChange={() => {
+              onToggleTodo(item.id);
+            }}
+          />
+          <button
+            onClick={() => {
+              onDeleteTodo(item.id);
+            }}
+          >
+            X
+          </button>
+        </div>
+      )
+  );
+}
 
 function TodoList() {
   const todoList = useTodos();
@@ -185,13 +186,12 @@ function TodoList() {
       <TodoListFilters />
       <TodoItemCreator />
 
-      {todoList.map((todoItem) => (
-        <TodoItem key={todoItem.id} item={todoItem} />
+      {todoList.map((id) => (
+        <TodoItem key={id} id={id} />
       ))}
     </>
   );
 }
-
 export default function App() {
   return (
     <Subscribe>
