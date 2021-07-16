@@ -1,4 +1,3 @@
-import { combineLatest } from "rxjs";
 import { map, takeWhile, scan, startWith } from "rxjs/operators";
 import { bind, shareLatest, Subscribe } from "@react-rxjs/core";
 import { createSignal, partitionByKey, combineKeys, mergeWithKey } from "@react-rxjs/utils";
@@ -145,9 +144,9 @@ const TodoItem: React.FC<{ id: number }> = ({ id }) => {
   const currentFilter = useCurrentFilter();
 
   return (
-    !(currentFilter == 'all'
-      || (currentFilter == 'done' && item.done )
-      || (currentFilter == 'pending' && !item.done))
+    !(currentFilter === 'all'
+      || (currentFilter === 'done' && item.done )
+      || (currentFilter === 'pending' && !item.done))
     ? null
     : (
         <div>
